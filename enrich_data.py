@@ -1,45 +1,66 @@
 """
 Fortune 500 Financial Analytics Platform
-Step 1: Load and clean Fortune 500 company data
+Step 2: Data cleaning and logo enrichment
 """
 
 import pandas as pd
 
+LOGO_BASE_URL = "https://logo.clearbit.com"
 
-def load_fortune500_data(path: str) -> pd.DataFrame:
-    """
-    Load Fortune company data and filter to Top 500
-    """
-    df = pd.read_csv(path)
 
-    # Standardize column names
-    df.columns = (
-        df.columns
-        .str.strip()
-        .str.lower()
-        .str.replace(" ", "_")
+def clean_currency(series):
+    return (
+        series.astype(str)
+        .str.replace("$", "", regex=False)
+        .str.replace(",", "", regex=False)
+        .str.replace("-", "", regex=False)
+        .astype(float)
     )
 
-    # Filter Top 500 if ranking column exists
-    if "rank" in df.columns:
-        df = df[df["rank"] <= 500].copy()
 
-    return df
+def clean_percentage(series):
+    return (
+        series.astype(str)
+        .str.replace("%", "", regex=False)
+        .str.replace("-", "", regex=False)
+        .astype(float)
+    )
+
+
+def generate_domain(company):
+    company = company.lower()
+    company = company.replace(" ", "")
+    company = company.replace(".", "")
+    company = company.replace(",", "")
+    company = company.replace("&", "and")
+    return f"{company}.com"
 
 
 def main():
-    input_path = "data/fortune_raw.csv"
-    output_path = "data/fortune500_clean.csv"
+    df = pd.read_csv("fortune_raw.csv")
 
-    df = load_fortune500_data(input_path)
+    # Standardize columns
+    df.columns = df.columns.str.lower().str.replace(" ", "_")
 
-    print("Rows:", df.shape[0])
-    print("Columns:", list(df.columns))
-    print(df.head())
+    # Clean numeric columns
+    df["revenues"] = clean_currency(df["revenues"])
+    df["profits"] = clean_currency(df["profits"])
+    df["assets"] = clean_currency(df["assets"])
+    df["market_value"] = clean_currency(df["market_value"])
+    df["revenue_change"] = clean_percentage(df["revenue_change"])
+    df["profit_change"] = clean_percentage(df["profit_change"])
 
-    # Save cleaned dataset
-    df.to_csv(output_path, index=False)
-    print(f"Clean Fortune 500 data saved to {output_path}")
+    # Add domains and logos
+    df["domain"] = df["company_name"].apply(generate_domain)
+    df["logo_url"] = df["domain"].apply(
+        lambda d: f"{LOGO_BASE_URL}/{d}"
+    )
+
+    # Save enriched dataset
+    df.to_csv("fortune500_enriched.csv", index=False)
+
+    print("Saved: fortune500_enriched.csv")
+    print(df[["rank", "company_name", "revenues", "profits", "logo_url"]].head())
 
 
 if __name__ == "__main__":
